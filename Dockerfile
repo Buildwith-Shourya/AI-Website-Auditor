@@ -5,7 +5,11 @@ ENV PYTHONUNBUFFERED=1
 ENV CHROME_PATH=/usr/bin/chromium
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    nodejs npm chromium \
+    curl ca-certificates chromium \
+    && curl -fsSL https://deb.nodesource.com/setup_22.x -o /tmp/nodesource_setup.sh \
+    && bash /tmp/nodesource_setup.sh \
+    && apt-get install -y --no-install-recommends nodejs \
+    && rm -f /tmp/nodesource_setup.sh \
     && rm -rf /var/lib/apt/lists/*
 
 RUN npm install -g lighthouse
