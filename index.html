@@ -1,0 +1,1120 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>AI Website Auditor</title>
+  <meta name="theme-color" content="#EAF6FF">
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <!-- Heading: Syne | Body: Manrope -->
+  <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700&family=Syne:wght@700;800&display=swap" rel="stylesheet">
+
+  <style>
+    :root {
+      /* Aurora palette */
+      --bg: #EAF6FF;          /* pale sky */
+      --aurora-1: #0EA5E9;    /* sky */
+      --aurora-2: #22D3EE;    /* cyan */
+      --aurora-3: #2DD4BF;    /* teal */
+      --aurora-4: #6366F1;    /* indigo */
+
+      /* Glass */
+      --glass: rgba(255, 255, 255, .55);
+      --glass-strong: rgba(255, 255, 255, .78);
+      --glass-border: rgba(255, 255, 255, .85);
+      --blur: blur(22px) saturate(160%);
+
+      --ink: #0B2540;
+      --muted: #46627D;
+      --line: rgba(11, 37, 64, .12);
+      --brand: #0284C7;
+
+      /* vivid fills (rings, bars, edges); text uses darker shades below */
+      --high: #FF5A6E;
+      --med: #FFB020;
+      --low: #3B9BFF;
+      --ok: #1FC98A;
+
+      --font-head: "Syne", sans-serif;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      background: var(--bg);
+      color: var(--ink);
+      font-family: "Manrope", sans-serif;
+      line-height: 1.6;
+    }
+
+    /* The aurora: the only thing that moves on its own */
+    body::before {
+      content: "";
+      position: fixed;
+      inset: -20%;
+      z-index: -1;
+      background:
+        radial-gradient(40% 40% at 18% 22%, var(--aurora-1) 0%, transparent 70%),
+        radial-gradient(35% 35% at 82% 18%, var(--aurora-2) 0%, transparent 70%),
+        radial-gradient(38% 38% at 70% 82%, var(--aurora-3) 0%, transparent 70%),
+        radial-gradient(30% 30% at 22% 80%, var(--aurora-4) 0%, transparent 70%);
+      opacity: .55;
+      filter: blur(30px);
+      animation: drift 28s ease-in-out infinite alternate;
+    }
+
+    @keyframes drift {
+      from { transform: translate(-3%, -2%) rotate(0deg) scale(1); }
+      to   { transform: translate(3%, 3%) rotate(8deg) scale(1.08); }
+    }
+
+    .wrap {
+      max-width: 920px;
+      margin: auto;
+      padding: 64px 22px 90px;
+    }
+
+    h1, h2, h3 {
+      font-family: var(--font-head);
+      margin: 0;
+      line-height: 1.15;
+      letter-spacing: -.02em;
+    }
+
+    h1 {
+      font-size: clamp(2.4rem, 6.5vw, 4rem);
+      font-weight: 800;
+      max-width: 12ch;
+      letter-spacing: -.03em;
+    }
+
+    h2 { font-size: 1.6rem; font-weight: 700; }
+    h3 { font-size: 1.15rem; font-weight: 600; }
+
+    :focus-visible {
+      outline: 2px solid var(--ink);
+      outline-offset: 3px;
+    }
+
+    /* ---------- Glass surface ---------- */
+    .glass,
+    .panel,
+    .issue,
+    .sub,
+    .bar,
+    #loader,
+    .msg {
+      background: var(--glass);
+      border: 1px solid var(--glass-border);
+      -webkit-backdrop-filter: var(--blur);
+      backdrop-filter: var(--blur);
+      box-shadow:
+        0 0 0 1px rgba(11, 37, 64, .06),
+        0 12px 40px rgba(14, 80, 130, .16),
+        inset 0 1px 0 rgba(255, 255, 255, .9);
+    }
+
+    @supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+      .glass, .panel, .issue, .sub, .bar, #loader, .msg { background: rgba(255, 255, 255, .92); }
+    }
+
+    .sub {
+      margin: 24px 0 32px;
+      max-width: 600px;
+      padding: 16px 20px;
+      border-radius: 18px;
+      color: var(--muted);
+    }
+
+    /* Search bar: input and button share one glass pill */
+    .bar {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      padding: 8px;
+      border-radius: 22px;
+    }
+
+    input {
+      flex: 1 1 260px;
+      min-width: 0;
+      padding: 14px 18px;
+      border: 0;
+      border-radius: 14px;
+      background: rgba(255, 255, 255, .7);
+      color: var(--ink);
+      font: inherit;
+    }
+
+    input::placeholder { color: #5B7690; }
+    input:focus { outline: none; background: #fff; }
+    input:focus-visible { outline: 2px solid var(--ink); outline-offset: 2px; }
+
+    button { font: inherit; cursor: pointer; }
+
+    #go, #downloadPdf {
+      padding: 14px 24px;
+      border: 1px solid rgba(255, 255, 255, .35);
+      border-radius: 14px;
+      background: linear-gradient(135deg, var(--aurora-1), var(--aurora-3));
+      color: #04121A;
+      font-weight: 700;
+      box-shadow: 0 6px 22px rgba(14, 165, 233, .35), inset 0 1px 0 rgba(255, 255, 255, .5);
+      transition: transform .15s, box-shadow .15s, filter .15s;
+    }
+
+    #go:hover:not(:disabled), #downloadPdf:hover {
+      transform: translateY(-2px);
+      filter: brightness(1.1);
+      box-shadow: 0 10px 30px rgba(14, 165, 233, .6), inset 0 1px 0 rgba(255, 255, 255, .4);
+    }
+
+    #go:active:not(:disabled), #downloadPdf:active { transform: translateY(0); }
+
+    button:disabled { opacity: .6; cursor: wait; }
+
+    .hint {
+      color: var(--muted);
+      font-size: .92rem;
+    }
+
+    p.hint { margin: 18px 4px 0; }
+
+    .hint a {
+      color: var(--ink);
+      font-weight: 600;
+      text-decoration: underline;
+      text-decoration-color: var(--aurora-2);
+      text-underline-offset: 4px;
+      cursor: pointer;
+    }
+
+    /* Sonar pings show the scan is running */
+    #loader {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      margin-top: 20px;
+      padding: 14px 18px;
+      border-radius: 16px;
+      color: var(--ink);
+    }
+
+    .sonar {
+      position: relative;
+      flex-shrink: 0;
+      width: 34px;
+      height: 34px;
+      border-radius: 50%;
+      background: radial-gradient(circle, var(--aurora-1) 0 4px, transparent 5px);
+    }
+
+    .sonar::before,
+    .sonar::after {
+      content: "";
+      position: absolute;
+      inset: 0;
+      border: 2px solid var(--aurora-1);
+      border-radius: 50%;
+      opacity: 0;
+      animation: ping 1.8s ease-out infinite;
+    }
+
+    .sonar::after { animation-delay: .9s; }
+
+    @keyframes ping {
+      from { transform: scale(.2); opacity: .9; }
+      to   { transform: scale(1.25); opacity: 0; }
+    }
+
+    .msg {
+      margin-top: 20px;
+      padding: 14px 18px;
+      border-radius: 16px;
+      background: rgba(255, 90, 110, .16);
+      border-color: rgba(255, 90, 110, .5);
+      color: #8F1226;
+      overflow-wrap: anywhere;
+    }
+
+    [hidden] { display: none !important; }
+
+    /* ---------- Report ---------- */
+    .panel {
+      margin-top: 22px;
+      padding: 26px;
+      border-radius: 24px;
+    }
+
+    .panel h3 { margin-bottom: 12px; }
+    #aiBox p { margin: 0; color: var(--ink); }
+
+    .top {
+      display: flex;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 30px;
+    }
+
+    .ring {
+      position: relative;
+      width: 145px;
+      height: 145px;
+      flex-shrink: 0;
+    }
+
+    .ring svg {
+      transform: rotate(-90deg);
+      filter: drop-shadow(0 0 10px rgba(14, 165, 233, .25));
+    }
+
+    .ring svg circle:first-child { stroke: rgba(11, 37, 64, .10); }
+    .ring svg circle:last-child { filter: drop-shadow(0 2px 6px rgba(14, 80, 130, .25)); }
+
+    .ring .number {
+      position: absolute;
+      inset: 0;
+      display: grid;
+      place-content: center;
+      text-align: center;
+    }
+
+    .ring .number strong {
+      font: 700 2.6rem var(--font-head);
+    }
+
+    .ring .number span {
+      color: var(--muted);
+      font-size: .82rem;
+    }
+
+    .info { flex: 1; min-width: 220px; }
+
+    #rurl {
+      color: var(--muted);
+      overflow-wrap: anywhere;
+      margin: 8px 0 0;
+    }
+
+    .counts, .tabs {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+    }
+
+    .counts { margin-top: 16px; }
+
+    .pill {
+      display: inline-block;
+      padding: 5px 14px;
+      border: 1px solid var(--glass-border);
+      border-radius: 99px;
+      background: var(--glass-strong);
+      font-size: .85rem;
+      font-weight: 600;
+    }
+
+    .high { color: #B4182E; }
+    .medium { color: #8A5200; }
+    .low { color: #1457B5; }
+
+    .pill.high { background: rgba(255, 90, 110, .18); border-color: rgba(255, 90, 110, .55); }
+    .pill.medium { background: rgba(255, 176, 32, .22); border-color: rgba(230, 150, 0, .55); }
+    .pill.low { background: rgba(59, 155, 255, .18); border-color: rgba(59, 155, 255, .55); }
+
+    .issue.high, .issue.medium, .issue.low { color: var(--ink); }
+
+    .section-title { margin-top: 40px; }
+
+    .tabs { margin: 18px 0 16px; }
+
+    .tab {
+      padding: 9px 18px;
+      border: 1px solid var(--glass-border);
+      border-radius: 99px;
+      background: var(--glass);
+      -webkit-backdrop-filter: var(--blur);
+      backdrop-filter: var(--blur);
+      color: var(--ink);
+      font-weight: 500;
+      transition: background .15s;
+    }
+
+    .tab:hover { background: var(--glass-strong); }
+
+    .tab[aria-pressed="true"] {
+      background: linear-gradient(135deg, var(--aurora-1), var(--aurora-2));
+      border-color: rgba(255, 255, 255, .4);
+      color: #04121A;
+      font-weight: 700;
+    }
+
+    .issue {
+      margin-bottom: 14px;
+      border-radius: 18px;
+      break-inside: avoid;
+      overflow: hidden;
+    }
+
+    /* severity shown as a glowing edge */
+    .issue.high   { box-shadow: 0 12px 40px rgba(14,80,130,.16), inset 5px 0 0 var(--high), inset 0 1px 0 rgba(255,255,255,.9); }
+    .issue.medium { box-shadow: 0 12px 40px rgba(14,80,130,.16), inset 5px 0 0 var(--med),  inset 0 1px 0 rgba(255,255,255,.9); }
+    .issue.low    { box-shadow: 0 12px 40px rgba(14,80,130,.16), inset 5px 0 0 var(--low),  inset 0 1px 0 rgba(255,255,255,.9); }
+
+    .issue summary {
+      padding: 16px 18px 16px 22px;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      cursor: pointer;
+      font-weight: 600;
+      list-style: none;
+    }
+
+    .issue summary::-webkit-details-marker { display: none; }
+    .issue summary .pill { margin-left: auto; }
+
+    .issue summary::after {
+      content: "";
+      flex-shrink: 0;
+      width: 9px;
+      height: 9px;
+      border-right: 2px solid var(--muted);
+      border-bottom: 2px solid var(--muted);
+      transform: rotate(45deg);
+      transition: transform .2s;
+    }
+
+    .issue[open] summary::after { transform: rotate(-135deg); }
+
+    .body { padding: 0 22px 20px; }
+
+    .body p {
+      margin: 0 0 12px;
+      color: var(--muted);
+      overflow-wrap: anywhere;
+    }
+
+    .fix {
+      padding: 14px 16px;
+      border: 1px solid var(--glass-border);
+      border-radius: 14px;
+      background: rgba(255, 255, 255, .6);
+      overflow-wrap: anywhere;
+    }
+
+    .fix b {
+      display: block;
+      margin-bottom: 5px;
+      font-family: var(--font-head);
+      color: #0369A1;
+    }
+
+    .ai-text {
+      color: var(--ink);
+      white-space: pre-wrap;
+      overflow-wrap: anywhere;
+      margin-top: 14px;
+    }
+
+    .ai-status {
+      display: inline-block;
+      margin-top: 12px;
+      color: var(--muted);
+      font-size: .85rem;
+    }
+
+    .empty {
+      padding: 28px;
+      text-align: center;
+      color: var(--muted);
+    }
+
+    .pdf-actions {
+      margin-top: 28px;
+      text-align: right;
+    }
+
+    /* Background texture. Change data-bg on the body tag: grid | dots | rays | waves | none */
+    .bgfx {
+      position: fixed;
+      inset: 0;
+      z-index: -1;
+      pointer-events: none;
+    }
+
+    body[data-bg="grid"] .bgfx {
+      background-image:
+        linear-gradient(rgba(11, 37, 64, .07) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(11, 37, 64, .07) 1px, transparent 1px);
+      background-size: 56px 56px;
+      -webkit-mask-image: radial-gradient(ellipse 80% 70% at 50% 25%, #000 15%, transparent 75%);
+      mask-image: radial-gradient(ellipse 80% 70% at 50% 25%, #000 15%, transparent 75%);
+    }
+
+    body[data-bg="dots"] .bgfx {
+      background-image: radial-gradient(rgba(11, 37, 64, .20) 1.2px, transparent 1.4px);
+      background-size: 28px 28px;
+      -webkit-mask-image: radial-gradient(ellipse 85% 75% at 50% 30%, #000 10%, transparent 78%);
+      mask-image: radial-gradient(ellipse 85% 75% at 50% 30%, #000 10%, transparent 78%);
+    }
+
+    body[data-bg="rays"] .bgfx {
+      background:
+        linear-gradient(105deg, transparent 18%, rgba(255, 255, 255, .70) 26%, transparent 34%),
+        linear-gradient(105deg, transparent 40%, rgba(255, 255, 255, .55) 47%, transparent 54%),
+        linear-gradient(105deg, transparent 62%, rgba(255, 255, 255, .65) 70%, transparent 78%);
+      filter: blur(10px);
+      -webkit-mask-image: linear-gradient(to bottom, #000 0%, transparent 85%);
+      mask-image: linear-gradient(to bottom, #000 0%, transparent 85%);
+    }
+
+    body[data-bg="waves"] .bgfx {
+      background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 1200 260' preserveAspectRatio='none'%3E%3Cpath d='M0 120 C150 60 300 180 450 120 S750 60 900 120 S1100 170 1200 120 V260 H0Z' fill='%2322D3EE' fill-opacity='.22'/%3E%3Cpath d='M0 170 C200 120 350 220 600 170 S1000 120 1200 170 V260 H0Z' fill='%230EA5E9' fill-opacity='.26'/%3E%3Cpath d='M0 215 C250 185 400 245 650 215 S1000 185 1200 215 V260 H0Z' fill='%236366F1' fill-opacity='.30'/%3E%3C/svg%3E") repeat-x bottom / 1200px 260px;
+    }
+
+    body[data-bg="none"] .bgfx { display: none; }
+
+    /* Cursor spotlight on glass cards */
+    .panel, .issue { position: relative; }
+
+    .panel::before,
+    .issue::before {
+      content: "";
+      position: absolute;
+      inset: 0;
+      border-radius: inherit;
+      pointer-events: none;
+      opacity: 0;
+      transition: opacity .25s;
+      background: radial-gradient(320px circle at var(--mx, 50%) var(--my, 50%), rgba(14, 165, 233, .12), transparent 70%);
+    }
+
+    .panel:hover::before,
+    .issue:hover::before { opacity: 1; }
+
+    /* Score ring draws itself; grade chip */
+    .ring svg circle:last-child {
+      transition: stroke-dasharray 1.3s cubic-bezier(.2, .8, .2, 1);
+    }
+
+    .grade {
+      display: inline-block;
+      margin: 10px 0 0;
+      padding: 4px 14px;
+      border: 1px solid var(--c);
+      border-radius: 99px;
+      background: color-mix(in srgb, var(--c) 18%, transparent);
+      color: color-mix(in srgb, var(--c) 45%, #0B2540);
+      font-weight: 700;
+      font-size: .9rem;
+    }
+
+    .grade:empty { display: none; }
+
+    /* Lighthouse metric cards */
+    .metrics {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+      gap: 14px;
+    }
+
+    .metric {
+      padding: 16px;
+      border: 1px solid var(--glass-border);
+      border-radius: 16px;
+      background: rgba(255, 255, 255, .6);
+    }
+
+    .metric span {
+      display: block;
+      color: var(--muted);
+      font-size: .85rem;
+      font-weight: 600;
+    }
+
+    .metric strong {
+      display: block;
+      margin: 4px 0 10px;
+      font: 700 1.9rem/1 var(--font-head);
+    }
+
+    .metric strong small {
+      color: var(--muted);
+      font: 500 .9rem "Manrope", sans-serif;
+    }
+
+    .metric .track {
+      height: 8px;
+      border-radius: 99px;
+      background: rgba(11, 37, 64, .10);
+      overflow: hidden;
+    }
+
+    .metric .track i {
+      display: block;
+      height: 100%;
+      border-radius: inherit;
+      background: var(--c);
+      box-shadow: 0 0 10px color-mix(in srgb, var(--c) 50%, transparent);
+    }
+
+    /* Count badge inside filter tabs */
+    .tab .n {
+      margin-left: 6px;
+      padding: 1px 8px;
+      border-radius: 99px;
+      background: rgba(11, 37, 64, .08);
+      font-size: .78rem;
+    }
+
+    .tab[aria-pressed="true"] .n { background: rgba(4, 18, 43, .2); }
+
+    @media (max-width: 540px) {
+      .wrap { padding: 40px 16px 70px; }
+      .panel { padding: 20px; }
+      #go { width: 100%; }
+      .pdf-actions { text-align: left; }
+      .issue summary { flex-wrap: wrap; }
+      body[data-bg="grid"] .bgfx { background-size: 40px 40px; }
+      body[data-bg="waves"] .bgfx { background-size: 700px 150px; }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      body::before, .sonar::before, .sonar::after { animation: none; }
+      * { transition: none !important; }
+    }
+
+    /* Professional PDF print layout */
+    @page {
+      size: A4;
+      margin: 14mm;
+    }
+
+    @media print {
+      body {
+        background: #fff !important;
+        color: #111 !important;
+        font-size: 10pt;
+        -webkit-print-color-adjust: exact;
+        print-color-adjust: exact;
+      }
+
+      body::before { display: none; }
+
+      .wrap {
+        max-width: 100%;
+        padding: 0;
+      }
+
+      .sub,
+      #auditForm,
+      .hint,
+      #loader,
+      #err,
+      .pdf-actions,
+      .tabs {
+        display: none !important;
+      }
+
+      h1, h2, h3 {
+        color: #111 !important;
+      }
+
+      .panel,
+      .issue,
+      .fix {
+        background: #fff !important;
+        color: #111 !important;
+        border: 1px solid #ccc !important;
+        box-shadow: none !important;
+        -webkit-backdrop-filter: none;
+        backdrop-filter: none;
+      }
+
+      .panel {
+        padding: 16px;
+        margin-top: 14px;
+      }
+
+      .body p,
+      .ai-text,
+      .ai-status,
+      #rurl,
+      .ring .number span,
+      .ring .number strong {
+        color: #333 !important;
+      }
+
+      .fix b { color: #111 !important; }
+
+      .pill {
+        border: 1px solid #ccc;
+        background: #fff !important;
+      }
+
+      .issue {
+        break-inside: avoid;
+        page-break-inside: avoid;
+      }
+
+      /* Print all issue explanations, even if collapsed */
+      .issue:not([open]) > .body {
+        display: block !important;
+      }
+
+      .issue summary { color: #111 !important; }
+      .issue summary::after { display: none; }
+
+      .bgfx { display: none; }
+      .panel::before, .issue::before { display: none; }
+      .metric { background: #fff !important; border: 1px solid #ccc !important; color: #111 !important; }
+      .metric strong, .metric span, .metric strong small { color: #333 !important; }
+      .metric .track i { box-shadow: none; }
+      .grade { color: #111 !important; background: #fff !important; border-color: #999 !important; }
+
+      .ring svg { filter: none; }
+      .ring svg circle:first-child { stroke: #ddd !important; }
+      .ring svg circle:last-child { filter: none; }
+
+      #report {
+        display: block !important;
+      }
+    }
+  </style>
+</head>
+
+<body data-bg="grid">
+<div class="bgfx" aria-hidden="true"></div>
+<main class="wrap">
+  <h1>AI Website Auditor</h1>
+
+  <p class="sub">
+    Enter your website URL to check SEO, accessibility and website quality.
+    Get an audit score, detected issues and AI-powered recommendations.
+  </p>
+
+  <form class="bar" id="auditForm">
+    <input id="url" type="text"
+      placeholder="https://example.com"
+      aria-label="Website URL" required>
+    <button id="go" type="submit">Analyze website</button>
+  </form>
+
+  <p class="hint">
+    Want to preview the interface?
+    <a id="demo" href="#">View demo report</a>
+  </p>
+
+  <div id="loader" class="hint" role="status" hidden>
+    <span class="sonar" aria-hidden="true"></span>
+    <span>Website scan in progress. This may take a little time...</span>
+  </div>
+
+  <div id="err" class="msg" role="alert" hidden></div>
+
+  <section id="report" hidden>
+    <div class="pdf-actions">
+      <button id="downloadPdf" type="button" onclick="window.print()">
+        📄 Download PDF Report
+      </button>
+    </div>
+
+    <div class="panel top">
+      <div class="ring" id="ring"></div>
+      <div class="info">
+        <h2>Audit Report</h2>
+        <p class="grade" id="grade"></p>
+        <p id="rurl"></p>
+        <div class="counts" id="counts"></div>
+      </div>
+    </div>
+
+    <div class="panel" id="lighthouseBox" hidden>
+      <h3>Lighthouse Scores</h3>
+      <div class="metrics" id="lighthouseScores"></div>
+    </div>
+
+    <div class="panel" id="aiBox" hidden>
+      <h3>AI Summary</h3>
+      <p id="ai"></p>
+    </div>
+
+    <div class="panel" id="aiRecommendationsBox" hidden>
+      <h3>🤖 AI Recommendations</h3>
+      <p class="hint">
+        Suggestions generated by TinyLlama based on the audit findings.
+      </p>
+      <div id="aiRecommendations" class="ai-text"></div>
+      <div id="aiStatus" class="ai-status"></div>
+    </div>
+
+    <h3 class="section-title">Detected Issues</h3>
+    <div class="tabs" id="tabs"></div>
+    <div id="issues"></div>
+  </section>
+</main>
+
+<script>
+  const API_URL = "http://127.0.0.1:8000";
+  const ENDPOINT = "/analyze";
+  const $ = id => document.getElementById(id);
+
+  let data = null;
+  let filter = "all";
+
+  const DEMO = {
+    url: "https://example.com",
+    website_score: 66,
+    severity_summary: { High: 1, Medium: 2, Low: 1 },
+    issues: [
+      {
+        issue: "HTTPS check",
+        category: "Security",
+        severity: "High",
+        suggestion: "Check that HTTPS and a valid TLS certificate are configured."
+      },
+      {
+        issue: "Meta description missing",
+        category: "SEO",
+        severity: "Medium",
+        suggestion: "Add a meaningful meta description."
+      },
+      {
+        issue: "Images missing ALT text",
+        category: "Accessibility",
+        severity: "Medium",
+        suggestion: "Add suitable ALT text to informative images."
+      },
+      {
+        issue: "Title needs review",
+        category: "SEO",
+        severity: "Low",
+        suggestion: "Use a clear, descriptive page title."
+      }
+    ],
+    lighthouse: {
+      scores: {
+        performance: 90,
+        accessibility: 92,
+        best_practices: 95,
+        seo: 88
+      }
+    },
+    ai_recommendations: {
+      status: "success",
+      model: "tinyllama",
+      recommendations:
+        "1. SEO: Add a meaningful meta description that summarizes the page.\n\n" +
+        "2. Accessibility: Add appropriate ALT text to informative images.\n\n" +
+        "3. Security: Verify HTTPS and certificate configuration."
+    }
+  };
+
+  function normalizeUrl(value) {
+    let url = value.trim();
+    if (!url) return null;
+
+    if (!/^https?:\/\//i.test(url)) {
+      url = "https://" + url;
+    }
+
+    try {
+      const parsed = new URL(url);
+      return parsed.hostname.includes(".") ? parsed.href : null;
+    } catch {
+      return null;
+    }
+  }
+
+  function showError(message) {
+    $("err").textContent = message;
+    $("err").hidden = false;
+  }
+
+  async function analyze(event) {
+    if (event) event.preventDefault();
+
+    $("err").hidden = true;
+    $("report").hidden = true;
+
+    const url = normalizeUrl($("url").value);
+
+    if (!url) {
+      showError("Invalid URL. Example: https://example.com");
+      return;
+    }
+
+    $("loader").hidden = false;
+    $("go").disabled = true;
+
+    try {
+      const response = await fetch(API_URL + ENDPOINT, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ url })
+      });
+
+      const result = await response.json();
+
+      if (!response.ok) {
+        throw new Error(
+          result.detail || result.error || "Server error: " + response.status
+        );
+      }
+
+      if (result.error) throw new Error(result.error);
+
+      render(result);
+    } catch (error) {
+      showError(
+        error instanceof TypeError
+          ? "Could not connect to the backend. Make sure the FastAPI server is running."
+          : error.message
+      );
+    } finally {
+      $("loader").hidden = true;
+      $("go").disabled = false;
+    }
+  }
+
+  function render(result) {
+    const issues = (result.issues || []).map(item => ({
+      title: item.title ?? item.issue ?? "Website issue",
+      category: item.category ?? "General",
+      severity: String(item.severity || "Low").toLowerCase(),
+      description: item.description ?? item.category ?? "Issue detected during the audit.",
+      recommendation: item.recommendation ?? item.suggestion ?? "Review this issue and make the necessary correction."
+    }));
+
+    const severity = result.severity_summary || {};
+    const counts = {
+      high: severity.High ?? severity.high ??
+        issues.filter(i => i.severity === "high").length,
+      medium: severity.Medium ?? severity.medium ??
+        issues.filter(i => i.severity === "medium").length,
+      low: severity.Low ?? severity.low ??
+        issues.filter(i => i.severity === "low").length
+    };
+
+    const rawScore = result.website_score ?? result.score ?? 0;
+    const score = Math.max(0, Math.min(100, Math.round(Number(rawScore) || 0)));
+
+    data = { ...result, issues };
+    filter = "all";
+
+    const color = score >= 80
+      ? "var(--ok)"
+      : score >= 50 ? "var(--med)" : "var(--high)";
+
+    const circumference = 2 * Math.PI * 62;
+
+    $("rurl").textContent = result.url || "";
+
+    $("ring").innerHTML = `
+      <svg width="145" height="145" viewBox="0 0 145 145" aria-label="Website score ${score} out of 100">
+        <circle cx="72.5" cy="72.5" r="62" fill="none"
+          stroke="var(--line)" stroke-width="13"/>
+        <circle cx="72.5" cy="72.5" r="62" fill="none"
+          stroke="${color}" stroke-width="13" stroke-linecap="round"
+          style="stroke-dasharray: 0 ${circumference}"/>
+      </svg>
+      <div class="number">
+        <strong>${score}</strong>
+        <span>out of 100</span>
+      </div>`;
+
+    $("grade").textContent =
+      score >= 90 ? "Excellent" :
+      score >= 80 ? "Good" :
+      score >= 50 ? "Needs work" : "Critical";
+    $("grade").style.setProperty("--c", color);
+
+    $("counts").innerHTML = ["high", "medium", "low"].map(level =>
+      `<span class="pill ${level}">${counts[level]} ${level}</span>`
+    ).join("");
+
+    const summaryText = result.ai_summary || result.summary_text || "";
+    $("aiBox").hidden = !summaryText;
+    $("ai").textContent = summaryText;
+
+    const aiResult = result.ai_recommendations;
+    let recommendationText = "";
+
+    if (typeof aiResult === "string") {
+      recommendationText = aiResult;
+    } else if (aiResult && typeof aiResult.recommendations === "string") {
+      recommendationText = aiResult.recommendations;
+    } else if (aiResult && Array.isArray(aiResult.recommendations)) {
+      recommendationText = aiResult.recommendations
+        .map(item => typeof item === "string" ? item : JSON.stringify(item))
+        .join("\n\n");
+    }
+
+    $("aiRecommendations").textContent = recommendationText;
+    $("aiRecommendationsBox").hidden = !recommendationText;
+
+    if (recommendationText) {
+      $("aiStatus").textContent =
+        aiResult && aiResult.status === "success"
+          ? "Generated by TinyLlama"
+          : "AI service status: " + (aiResult?.status || "unknown");
+    } else {
+      $("aiStatus").textContent = "";
+    }
+
+    const lighthouseScores = result.lighthouse?.scores;
+    const scoreLabels = [
+      ["performance", "Performance"],
+      ["accessibility", "Accessibility"],
+      ["best_practices", "Best Practices"],
+      ["seo", "SEO"]
+    ];
+
+    const availableScores = lighthouseScores
+      ? scoreLabels.filter(([key]) =>
+          lighthouseScores[key] !== null &&
+          lighthouseScores[key] !== undefined &&
+          lighthouseScores[key] !== "" &&
+          Number.isFinite(Number(lighthouseScores[key]))
+        )
+      : [];
+
+    $("lighthouseBox").hidden = availableScores.length === 0;
+
+    $("lighthouseScores").innerHTML = availableScores.map(([key, label]) => {
+      const value = Math.max(
+        0,
+        Math.min(100, Math.round(Number(lighthouseScores[key])))
+      );
+
+      const tone = value >= 90 ? "var(--ok)" : value >= 50 ? "var(--med)" : "var(--high)";
+
+      return `
+        <div class="metric" style="--c:${tone}">
+          <span>${escapeHTML(label)}</span>
+          <strong>${value}<small>/100</small></strong>
+          <div class="track"><i style="width:${value}%"></i></div>
+        </div>`;
+    }).join("");
+
+    $("tabs").innerHTML = [
+      ["all", "All"],
+      ["high", "High"],
+      ["medium", "Medium"],
+      ["low", "Low"]
+    ].map(([key, label]) =>
+      `<button type="button" class="tab" data-k="${key}"
+        aria-pressed="${key === "all"}">${label}<span class="n">${key === "all" ? issues.length : issues.filter(i => i.severity === key).length}</span></button>`
+    ).join("");
+
+    $("tabs").querySelectorAll(".tab").forEach(button => {
+      button.onclick = () => {
+        filter = button.dataset.k;
+
+        $("tabs").querySelectorAll(".tab").forEach(tab =>
+          tab.setAttribute("aria-pressed", String(tab === button))
+        );
+
+        listIssues();
+      };
+    });
+
+    listIssues();
+    $("report").hidden = false;
+    animateScore(score, circumference);
+    $("report").scrollIntoView({ behavior: "smooth", block: "start" });
+  }
+
+  // Score ring draws itself and the number counts up (skipped if motion is reduced)
+  function animateScore(score, circumference) {
+    const circle = $("ring").querySelector("circle:last-child");
+    const number = $("ring").querySelector("strong");
+    const target = circumference * score / 100;
+
+    if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
+      circle.style.strokeDasharray = `${target} ${circumference}`;
+      return;
+    }
+
+    number.textContent = "0";
+
+    requestAnimationFrame(() => requestAnimationFrame(() => {
+      circle.style.strokeDasharray = `${target} ${circumference}`;
+    }));
+
+    const start = performance.now();
+    const duration = 1300;
+
+    const tick = now => {
+      const t = Math.min((now - start) / duration, 1);
+      number.textContent = Math.round(score * (1 - Math.pow(1 - t, 3)));
+      if (t < 1) requestAnimationFrame(tick);
+    };
+
+    requestAnimationFrame(tick);
+  }
+
+  function escapeHTML(value) {
+    return String(value ?? "").replace(/[&<>"']/g, char => ({
+      "&": "&amp;",
+      "<": "&lt;",
+      ">": "&gt;",
+      '"': "&quot;",
+      "'": "&#39;"
+    })[char]);
+  }
+
+  function listIssues() {
+    if (!data) return;
+
+    const order = { high: 0, medium: 1, low: 2 };
+
+    const items = data.issues
+      .filter(item => filter === "all" || item.severity === filter)
+      .sort((a, b) => (order[a.severity] ?? 3) - (order[b.severity] ?? 3));
+
+    $("issues").innerHTML = items.length
+      ? items.map((item, index) => `
+          <details class="issue ${escapeHTML(item.severity)}" ${index === 0 ? "open" : ""}>
+            <summary>
+              ${escapeHTML(item.title)}
+              <span class="pill ${escapeHTML(item.severity)}">${escapeHTML(item.severity)}</span>
+            </summary>
+            <div class="body">
+              <p><strong>Category:</strong> ${escapeHTML(item.category)}</p>
+              <p>${escapeHTML(item.description)}</p>
+              <div class="fix">
+                <b>How to fix</b>
+                ${escapeHTML(item.recommendation)}
+              </div>
+            </div>
+          </details>
+        `).join("")
+      : `<div class="panel empty">No issues found in this category.</div>`;
+  }
+
+  $("auditForm").addEventListener("submit", analyze);
+
+  $("demo").addEventListener("click", event => {
+    event.preventDefault();
+    $("err").hidden = true;
+    $("url").value = DEMO.url;
+    render(DEMO);
+  });
+
+  // Cursor spotlight on glass cards
+  document.addEventListener("pointermove", event => {
+    const card = event.target.closest && event.target.closest(".panel, .issue");
+    if (!card) return;
+    const box = card.getBoundingClientRect();
+    card.style.setProperty("--mx", (event.clientX - box.left) + "px");
+    card.style.setProperty("--my", (event.clientY - box.top) + "px");
+  });
+</script>
+</body>
+</html>
